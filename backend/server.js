@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { getDb } = require('./db');
 const productsRouter = require('./routes/products');
 const pricesRouter = require('./routes/prices');
@@ -8,7 +9,46 @@ const scheduler = require('./scheduler');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// CORS — only allow the Chrome/Firefox extension origins
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    // Allow requests with no origin (e.g. curl, server-to-server) only in dev
+    if (!origin) {
+      return callback(null, process.env.NODE_ENV !== 'production');
+    }
+    // Allow chrome-extension:// and moz-extension:// origins
+    if (origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://')) {
+      return callback(null, true);
+    }
+    // Allow explicitly configured origins
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  }
+}));
+
+// Rate limiting — 100 requests per minute per IP
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, try again later.' }
+}));
+
+// API key authentication
+const API_KEY = process.env.API_KEY || 'dev-key-change-me';
+
+app.use((req, res, next) => {
+  if (req.headers['x-api-key'] !== API_KEY) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  next();
+});
+
 app.use(express.json());
 
 // Routes

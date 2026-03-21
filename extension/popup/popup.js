@@ -38,8 +38,11 @@ function buildAffiliateUrl(url, source) {
 
 // --- API helpers ---
 
+const API_KEY = 'dev-key-change-me';
+const API_HEADERS = { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
+
 async function apiGet(path) {
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetch(`${API_BASE}${path}`, { headers: { 'X-API-Key': API_KEY } });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -47,7 +50,7 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: API_HEADERS,
     body: JSON.stringify(body)
   });
   if (!res.ok) {
@@ -60,7 +63,7 @@ async function apiPost(path, body) {
 async function apiPatch(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: API_HEADERS,
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -68,7 +71,7 @@ async function apiPatch(path, body) {
 }
 
 async function apiDelete(path) {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE', headers: { 'X-API-Key': API_KEY } });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

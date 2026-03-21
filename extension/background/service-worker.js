@@ -1,4 +1,5 @@
 const API_BASE = 'http://localhost:3000';
+const API_KEY = 'dev-key-change-me';
 
 // Poll for alerts every 5 minutes
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
@@ -19,7 +20,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 async function pollAlerts() {
   try {
-    const response = await fetch(`${API_BASE}/api/alerts`);
+    const response = await fetch(`${API_BASE}/api/alerts`, { headers: { 'X-API-Key': API_KEY } });
     if (!response.ok) return;
 
     const { priceAlerts, unavailableAlerts } = await response.json();
