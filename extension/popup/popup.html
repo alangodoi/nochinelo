@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>No Chinelo</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>No Chinelo</h1>
+    <nav>
+      <button id="tabCurrent" class="tab active">Página Atual</button>
+      <button id="tabAll" class="tab">Rastreados</button>
+    </nav>
+  </header>
+
+  <!-- Current page view -->
+  <section id="viewCurrent">
+    <div id="notSupported" class="message" style="display:none;">
+      <p>Abra uma página de produto da Amazon, Mercado Livre ou Shopee para começar.</p>
+    </div>
+    <div id="productInfo" style="display:none;">
+      <div class="product-header">
+        <img id="productImage" class="product-thumb" src="" alt="">
+        <div class="product-header-info">
+          <div class="product-source-row">
+            <span id="productSource" class="source-badge"></span>
+          </div>
+          <h2 id="productTitle"></h2>
+        </div>
+      </div>
+      <div class="price-card">
+        <div class="price-main">
+          <span id="productPrice" class="price"></span>
+          <span id="priceTrend" class="trend"></span>
+        </div>
+        <div class="price-range">
+          <div class="price-range-item">
+            <span class="price-range-label">Menor</span>
+            <span id="lowestPrice" class="price-range-value lowest"></span>
+          </div>
+          <div class="price-range-sep"></div>
+          <div class="price-range-item">
+            <span class="price-range-label">Maior</span>
+            <span id="highestPrice" class="price-range-value highest"></span>
+          </div>
+        </div>
+      </div>
+      <div id="couponBanner" class="coupon-banner" style="display:none;"></div>
+      <div class="alert-section" style="display:none;">
+        <label for="targetPrice">Preço-alvo (R$):</label>
+        <div class="alert-input">
+          <input type="number" id="targetPrice" step="0.01" min="0" placeholder="0,00">
+          <button id="btnSetAlert">Definir Alerta</button>
+        </div>
+        <p id="alertStatus" class="alert-status"></p>
+      </div>
+      <div class="chart-container">
+        <canvas id="priceChart"></canvas>
+      </div>
+      <button id="btnTrack" class="btn-primary" style="display:none;">Rastrear Produto</button>
+      <button id="btnRemove" class="btn-danger" style="display:none;">Parar de Rastrear</button>
+    </div>
+  </section>
+
+  <!-- All tracked products view -->
+  <section id="viewAll" style="display:none;">
+    <div id="noProducts" class="message" style="display:none;">
+      <p>Nenhum produto rastreado ainda.</p>
+    </div>
+    <ul id="productList"></ul>
+  </section>
+
+  <!-- Product detail view (opened from Rastreados list) -->
+  <section id="viewDetail" style="display:none;">
+    <button id="btnBack" class="btn-back">&#8592; Voltar</button>
+    <div class="product-header">
+      <img id="detailImage" class="product-thumb" src="" alt="">
+      <div class="product-header-info">
+        <div class="product-source-row">
+          <span id="detailSource" class="source-badge"></span>
+        </div>
+        <h2 id="detailTitle" class="detail-title"></h2>
+      </div>
+    </div>
+    <div class="price-card">
+      <div class="price-main">
+        <span id="detailPrice" class="price"></span>
+        <span id="detailTrend" class="trend"></span>
+      </div>
+      <div class="price-range">
+        <div class="price-range-item">
+          <span class="price-range-label">Menor</span>
+          <span id="detailLowest" class="price-range-value lowest"></span>
+        </div>
+        <div class="price-range-sep"></div>
+        <div class="price-range-item">
+          <span class="price-range-label">Maior</span>
+          <span id="detailHighest" class="price-range-value highest"></span>
+        </div>
+      </div>
+    </div>
+    <div id="detailCouponBanner" class="coupon-banner" style="display:none;"></div>
+    <div class="detail-alert-section">
+      <label for="detailTargetPrice">Preço-alvo (R$):</label>
+      <div class="alert-input">
+        <input type="number" id="detailTargetPrice" step="0.01" min="0" placeholder="0,00">
+        <button id="btnDetailSetAlert">Definir Alerta</button>
+      </div>
+      <p id="detailAlertStatus" class="alert-status"></p>
+    </div>
+    <div class="chart-container">
+      <canvas id="detailChart"></canvas>
+    </div>
+    <div class="detail-actions">
+      <a id="btnViewProduct" class="btn-open-link" href="#" target="_blank">Ver produto</a>
+      <button id="btnDetailRemove" class="btn-danger">Parar de Rastrear</button>
+    </div>
+  </section>
+
+  <script src="../lib/chart.umd.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
