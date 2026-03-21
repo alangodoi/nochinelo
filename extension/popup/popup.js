@@ -18,6 +18,12 @@ const MERCHANTS = {
     hostPattern: 'shopee.com.br',
     idPattern: /-i\.(\d+\.\d+)/,
     defaultTitle: 'Produto Shopee'
+  },
+  kabum: {
+    name: 'KaBuM!',
+    hostPattern: 'kabum.com.br',
+    idPattern: /\/produto\/(\d+)/,
+    defaultTitle: 'Produto KaBuM!'
   }
 };
 

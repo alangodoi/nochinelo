@@ -26,6 +26,13 @@
       idPattern: /-i\.(\d+\.\d+)/,
       useDomScrape: true,
       isSPA: true
+    },
+    kabum: {
+      hostPattern: 'kabum.com.br',
+      idPattern: /\/produto\/(\d+)/,
+      priceSelectors: ['.finalPrice'],
+      titleSelector: '.nameProduct, h1[itemprop="name"]',
+      imageSelectors: ['img.imageCard', 'meta[property="og:image"]']
     }
   };
 
@@ -116,7 +123,7 @@
     for (const sel of merchant.imageSelectors) {
       const el = document.querySelector(sel);
       if (el) {
-        const src = el.src || el.getAttribute('data-src');
+        const src = el.src || el.getAttribute('content') || el.getAttribute('data-src');
         if (src) return src;
       }
     }

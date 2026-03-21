@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Chrome Extension (Manifest V3) that tracks product prices over time on Amazon.com.br, Mercado Livre and Shopee to identify the best buying opportunity (lowest price). Plain HTML/CSS/JS, no build step.
+Chrome Extension (Manifest V3) that tracks product prices over time on Amazon.com.br, Mercado Livre, Shopee and KaBuM! to identify the best buying opportunity (lowest price). Plain HTML/CSS/JS, no build step.
 
 ## Development
 
@@ -28,7 +28,7 @@ To test the service worker and alarms, use the "Inspect" link next to the servic
 
 ## Data schema (chrome.storage.local)
 
-- `products`: `{ [productId]: { productId, source, title, url, currentPrice, targetPrice, alertTriggered, addedAt, lastChecked, failCount, unavailable } }` — quick lookup map. `source` is the merchant key (`'amazon'`, `'mercadolivre'`, or `'shopee'`). Shopee productId format is `{shopId}.{itemId}`.
+- `products`: `{ [productId]: { productId, source, title, url, currentPrice, targetPrice, alertTriggered, addedAt, lastChecked, failCount, unavailable } }` — quick lookup map. `source` is the merchant key (`'amazon'`, `'mercadolivre'`, `'shopee'`, or `'kabum'`). Shopee productId format is `{shopId}.{itemId}`. KaBuM! productId is numeric (e.g. `644498`).
 - `priceHistory`: `{ [productId]: [{ ts, price, event?, oldProductId? }] }` — separated from products for lazy loading. Entries with `event: 'replaced'` and `price: null` mark product link replacements.
 - `settings`: `{ checkIntervalMinutes, maxHistoryPerProduct }`
 - `migrated`: boolean flag for one-time ASIN→productId migration
@@ -36,11 +36,12 @@ To test the service worker and alarms, use the "Inspect" link next to the servic
 ## Key patterns
 
 - **Price parsing (BRL)**: Remove `R$` and spaces, replace `.` (thousands separator) with nothing, replace `,` (decimal) with `.`, then `parseFloat`. Works for both Amazon and Mercado Livre.
-- **Product ID extraction**: Amazon: regex `/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i`. Mercado Livre: regex `/\/p\/(ML[A-Z]\d+)/i`. Shopee: regex `/-i\.(\d+\.\d+)/` (captures `shopId.itemId`).
+- **Product ID extraction**: Amazon: regex `/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i`. Mercado Livre: regex `/\/p\/(ML[A-Z]\d+)/i`. Shopee: regex `/-i\.(\d+\.\d+)/` (captures `shopId.itemId`). KaBuM!: regex `/\/produto\/(\d+)/`.
 - **Amazon price selectors cascade**: `.a-price:not(.a-text-price) .a-offscreen` → `.priceToPay .a-offscreen` → `#priceblock_ourprice` → `span.a-color-price`.
 - **Mercado Livre price extraction**: First tries `.price-tag-text-sr-only`. Fallback: combines `.andes-money-amount__fraction` + `.andes-money-amount__cents` (scoped to `.ui-pdp-price__second-line` to avoid grabbing the strikethrough price).
 - **Deduplication**: Only records a new price entry if the price changed or 6+ hours elapsed since the last entry.
 - **Shopee price extraction**: Shopee uses obfuscated CSS class names that change every deploy, and serves a blank HTML shell (all content is JS-rendered). Solution: `shopee-intercept.js` runs at `document_start` and monkey-patches `window.fetch` in the page context (via injected `<script>`) to intercept Shopee's own API calls (`/api/v4/item/get` or `/api/v4/pdp/get_pc`). Data is relayed to the content script via `CustomEvent`. Price from API is divided by 100,000 to get BRL value.
-- **Background fetches**: Sequential with 3s delay between products. Only for merchants with `supportsBackgroundFetch: true` (currently Amazon only). Mercado Livre and Shopee prices update only when the user visits the page.
+- **KaBuM! price extraction**: Server-rendered (Next.js SSR). Backend scraper extracts price, title and image from JSON-LD structured data or `__NEXT_DATA__` script. Prices are already in BRL float format. Content script uses CSS selectors with meta tag fallback for images.
+- **Background fetches**: Sequential with 3s delay between products. Only for merchants with `supportsBackgroundFetch: true` (currently Amazon only). Mercado Livre and Shopee prices update only when the user visits the page. KaBuM! is server-rendered so background fetch works.
 - **Alert logic**: Notifies once when price drops below target (`alertTriggered` flag), resets when price goes back above target.
 - **Unavailable detection**: After 3 consecutive background fetch failures, product is marked `unavailable` and user is notified. User can replace the link with a new product URL (from any supported merchant), preserving price history with a visual marker.
