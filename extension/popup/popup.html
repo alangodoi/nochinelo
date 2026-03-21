@@ -56,6 +56,11 @@
         </div>
         <p id="alertStatus" class="alert-status"></p>
       </div>
+      <div class="chart-range-buttons" id="chartRangeButtons">
+        <button class="range-btn active" data-range="45">45 dias</button>
+        <button class="range-btn" data-range="180">6 meses</button>
+        <button class="range-btn" data-range="365">1 ano</button>
+      </div>
       <div class="chart-container">
         <canvas id="priceChart"></canvas>
       </div>
@@ -109,6 +114,11 @@
         <button id="btnDetailSetAlert">Definir Alerta</button>
       </div>
       <p id="detailAlertStatus" class="alert-status"></p>
+    </div>
+    <div class="chart-range-buttons" id="detailRangeButtons">
+      <button class="range-btn active" data-range="45">45 dias</button>
+      <button class="range-btn" data-range="180">6 meses</button>
+      <button class="range-btn" data-range="365">1 ano</button>
     </div>
     <div class="chart-container">
       <canvas id="detailChart"></canvas>

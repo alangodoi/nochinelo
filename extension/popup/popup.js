@@ -80,6 +80,9 @@ async function apiDelete(path) {
 let currentProductId = null;
 let currentSource = null;
 let chartInstance = null;
+let currentHistory = [];       // full history for current-page chart
+let detailHistory = [];        // full history for detail chart
+const DEFAULT_RANGE_DAYS = 45;
 
 // --- DOM refs ---
 const tabCurrent = document.getElementById('tabCurrent');
@@ -207,6 +210,7 @@ async function showCurrentProduct() {
   btnTrack.textContent = 'Rastrear Produto';
   btnRemove.style.display = 'none';
   if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  resetRangeButtons('chartRangeButtons');
 
   let product = null;
   let history = [];
@@ -302,7 +306,9 @@ async function showCurrentProduct() {
     btnTrack.style.display = 'none';
     btnRemove.style.display = 'block';
 
-    renderChart(history);
+    currentHistory = history;
+    renderChart(history, DEFAULT_RANGE_DAYS);
+    setupRangeButtons('chartRangeButtons', history, (filtered) => renderChart(filtered));
   } else {
     // Not tracked (or never tracked) — show what we have, offer to track
     // Use backend data if product exists but is untracked
@@ -399,8 +405,41 @@ btnSetAlert.addEventListener('click', async () => {
 });
 
 // --- Chart ---
-function renderChart(history) {
-  if (history.length === 0) return;
+
+function filterHistoryByDays(history, days) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return history.filter(h => new Date(h.ts).getTime() >= cutoff);
+}
+
+function resetRangeButtons(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('.range-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.range === String(DEFAULT_RANGE_DAYS));
+  });
+}
+
+function setupRangeButtons(containerId, history, renderFn) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  // Clone buttons to remove old listeners
+  container.querySelectorAll('.range-btn').forEach(btn => {
+    const clone = btn.cloneNode(true);
+    btn.replaceWith(clone);
+  });
+  container.querySelectorAll('.range-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const days = parseInt(btn.dataset.range, 10);
+      renderFn(filterHistoryByDays(history, days));
+    });
+  });
+}
+
+function renderChart(history, days) {
+  const filtered = days ? filterHistoryByDays(history, days) : history;
+  if (filtered.length === 0) return;
 
   const ctx = document.getElementById('priceChart').getContext('2d');
   if (chartInstance) chartInstance.destroy();
@@ -409,7 +448,7 @@ function renderChart(history) {
   const data = [];
   const markerIndices = [];
 
-  history.forEach((h, i) => {
+  filtered.forEach((h, i) => {
     const d = new Date(h.ts);
     labels.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
     if (h.event === 'replaced') {
@@ -507,6 +546,7 @@ function showView(view) {
 async function showProductDetail(id) {
   detailProductId = id;
   showView(viewDetail);
+  resetRangeButtons('detailRangeButtons');
 
   let product, history;
   try {
@@ -576,19 +616,22 @@ async function showProductDetail(id) {
   btnViewProduct.href = buildAffiliateUrl(product.url, product.source);
 
   // Chart
-  renderDetailChart(history);
+  detailHistory = history;
+  renderDetailChart(history, DEFAULT_RANGE_DAYS);
+  setupRangeButtons('detailRangeButtons', history, (filtered) => renderDetailChart(filtered));
 }
 
-function renderDetailChart(history) {
+function renderDetailChart(history, days) {
   if (detailChartInstance) detailChartInstance.destroy();
-  if (history.length === 0) return;
+  const filtered = days ? filterHistoryByDays(history, days) : history;
+  if (filtered.length === 0) return;
 
   const ctx = document.getElementById('detailChart').getContext('2d');
   const labels = [];
   const data = [];
   const markerIndices = [];
 
-  history.forEach((h, i) => {
+  filtered.forEach((h, i) => {
     const d = new Date(h.ts);
     labels.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
     if (h.event === 'replaced') {
