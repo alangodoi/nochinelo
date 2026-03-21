@@ -183,6 +183,57 @@ router.post('/:id/replace', (req, res) => {
   res.json(toApi(row));
 });
 
+// POST /api/products/:id/price — receive price update from extension content script
+router.post('/:id/price', (req, res) => {
+  const db = getDb();
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+
+  const { price, title, imageUrl } = req.body;
+  if (!price || typeof price !== 'number') return res.status(400).json({ error: 'Valid price is required' });
+
+  const now = new Date().toISOString();
+
+  // Update product info
+  db.prepare(`
+    UPDATE products SET
+      current_price = ?,
+      title = COALESCE(?, title),
+      image_url = COALESCE(?, image_url),
+      fail_count = 0,
+      unavailable = 0,
+      last_checked = ?
+    WHERE id = ?
+  `).run(price, title || null, imageUrl || null, now, req.params.id);
+
+  // Alert logic
+  if (product.target_price && price <= product.target_price && !product.alert_triggered) {
+    db.prepare('UPDATE products SET alert_triggered = 1 WHERE id = ?').run(req.params.id);
+  }
+  if (product.target_price && price > product.target_price && product.alert_triggered) {
+    db.prepare('UPDATE products SET alert_triggered = 0 WHERE id = ?').run(req.params.id);
+  }
+
+  // Record price history (with dedup)
+  const lastEntry = db.prepare(
+    'SELECT ts, price FROM price_history WHERE product_id = ? ORDER BY ts DESC LIMIT 1'
+  ).get(req.params.id);
+
+  const sixHoursMs = 6 * 60 * 60 * 1000;
+  const shouldRecord = !lastEntry
+    || lastEntry.price !== price
+    || (Date.now() - lastEntry.ts) >= sixHoursMs;
+
+  if (shouldRecord) {
+    db.prepare(
+      'INSERT INTO price_history (product_id, ts, price) VALUES (?, ?, ?)'
+    ).run(req.params.id, Date.now(), price);
+  }
+
+  const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+  res.json(toApi(updated));
+});
+
 // POST /api/products/:id/check
 router.post('/:id/check', async (req, res) => {
   const db = getDb();

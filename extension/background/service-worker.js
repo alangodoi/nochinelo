@@ -13,8 +13,50 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ apiBase: API_BASE });
     return false;
   }
+  if (msg.type === 'PRICE_UPDATE') {
+    handlePriceUpdate(msg);
+    return false;
+  }
   return false;
 });
+
+async function handlePriceUpdate(msg) {
+  const { productId, source, price, title, imageUrl, url } = msg;
+  if (!productId) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/products/${productId}`, {
+      headers: { 'X-API-Key': API_KEY }
+    });
+    if (!res.ok) return; // product not tracked
+
+    const product = await res.json();
+    if (!product.tracked) return;
+
+    // Update product data if we have new info
+    const updates = {};
+    if (title && !product.title) updates.title = title;
+    if (url) updates.url = url;
+
+    if (Object.keys(updates).length > 0) {
+      await fetch(`${API_BASE}/api/products/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify(updates)
+      });
+    }
+
+    // Report price to backend
+    if (price) {
+      await fetch(`${API_BASE}/api/products/${productId}/price`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ price, title, imageUrl })
+      });
+    }
+  } catch (e) {
+    // Backend might be offline
+  }
+}
 
 // --- Alert polling ---
 

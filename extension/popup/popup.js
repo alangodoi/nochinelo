@@ -363,7 +363,27 @@ btnTrack.addEventListener('click', async () => {
   btnTrack.textContent = 'Adicionando...';
 
   try {
-    await apiPost('/api/products', { url: tab.url });
+    const product = await apiPost('/api/products', { url: tab.url });
+
+    // If backend scraper couldn't get data (e.g. Shopee 403), try sending
+    // data from the content script
+    if (!product.title || !product.currentPrice) {
+      try {
+        const liveData = await new Promise((resolve) => {
+          chrome.tabs.sendMessage(tab.id, { type: 'GET_PRICE' }, resolve);
+        });
+        if (liveData && (liveData.price || liveData.title)) {
+          await apiPost(`/api/products/${product.id}/price`, {
+            price: liveData.price,
+            title: liveData.title,
+            imageUrl: liveData.imageUrl
+          });
+        }
+      } catch (e) {
+        // Content script might not be ready
+      }
+    }
+
     await showCurrentProduct();
   } catch (e) {
     console.error('Failed to track product:', e);

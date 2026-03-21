@@ -80,7 +80,7 @@
       .replace(/\s*[\|\-–]\s*Lojas Oficiais.*$/i, '')
       .trim() || null;
 
-    if (!document.body) return { price: null, title };
+    if (!document.body) return { price: null, title, imageUrl: null };
 
     let price = null;
     const elements = document.body.querySelectorAll('div, span');
@@ -97,7 +97,18 @@
       }
     }
 
-    return { price, title };
+    // Extract product image
+    let imageUrl = null;
+    const ogImage = document.querySelector('meta[property="og:image"]');
+    if (ogImage) {
+      imageUrl = ogImage.getAttribute('content') || null;
+    }
+    if (!imageUrl) {
+      const img = document.querySelector('img[src*="susercontent.com"]');
+      if (img) imageUrl = img.src;
+    }
+
+    return { price, title, imageUrl };
   }
 
   function extractImage(merchant) {
@@ -164,14 +175,41 @@
   const { key: source, merchant } = detected;
   let lastUrl = window.location.href;
 
-  // SPA observer for Shopee
+  // Send price update to service worker so backend gets updated
+  function sendPriceUpdate() {
+    const url = window.location.href;
+    const match = url.match(merchant.idPattern);
+    if (!match) return;
+
+    const productId = match[1];
+    const data = getProductData(merchant);
+    if (data.price || data.title) {
+      chrome.runtime.sendMessage({
+        type: 'PRICE_UPDATE',
+        productId,
+        source,
+        price: data.price,
+        title: data.title,
+        imageUrl: data.imageUrl || null,
+        url
+      });
+    }
+  }
+
+  // SPA observer for Shopee — also re-sends price updates on navigation
   if (merchant.isSPA) {
+    // Delay initial send to let Shopee JS render
+    setTimeout(sendPriceUpdate, 3000);
     setInterval(() => {
       const url = window.location.href;
       if (url !== lastUrl) {
         lastUrl = url;
+        setTimeout(sendPriceUpdate, 3000);
       }
     }, 1000);
+  } else {
+    // For non-SPA merchants, send once on load
+    sendPriceUpdate();
   }
 
   // Respond to popup requests for current page price
