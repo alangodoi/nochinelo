@@ -91,11 +91,6 @@ let detailHistory = [];        // full history for detail chart
 const DEFAULT_RANGE_DAYS = 45;
 let originTabId = null;        // the product page tab that opened this popout
 
-// --- Close button (when embedded as iframe) ---
-document.getElementById('btnClose')?.addEventListener('click', () => {
-  window.parent.postMessage({ type: 'NOCHINELO_CLOSE' }, '*');
-});
-
 // --- DOM refs ---
 const tabCurrent = document.getElementById('tabCurrent');
 const tabAll = document.getElementById('tabAll');
@@ -174,33 +169,20 @@ function extractProductInfo(url) {
 
 // --- Init ---
 
-async function getOriginTab() {
-  // Get the tab ID from query params (set by the service worker)
-  const params = new URLSearchParams(window.location.search);
-  const tabIdParam = params.get('tabId');
-  if (tabIdParam) {
-    originTabId = parseInt(tabIdParam, 10);
-    try {
-      return await chrome.tabs.get(originTabId);
-    } catch (e) {
-      originTabId = null;
-    }
-  }
-  // Fallback: find the active tab in the last focused window (not this popout)
-  const wins = await chrome.windows.getAll({ windowTypes: ['normal'] });
-  for (const win of wins) {
-    const tabs = await chrome.tabs.query({ active: true, windowId: win.id });
-    const tab = tabs[0];
-    if (tab && !tab.url?.startsWith('chrome-extension://')) {
-      originTabId = tab.id;
-      return tab;
-    }
+async function getActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (tab && !tab.url?.startsWith('chrome-extension://') && !tab.url?.startsWith('chrome://')) {
+    originTabId = tab.id;
+    return tab;
   }
   return null;
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  const tab = await getOriginTab();
+async function refreshCurrentTab() {
+  currentProductId = null;
+  currentSource = null;
+
+  const tab = await getActiveTab();
   if (tab?.url) {
     const info = extractProductInfo(tab.url);
     if (info) {
@@ -214,6 +196,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     notSupported.style.display = 'block';
     productInfo.style.display = 'none';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => refreshCurrentTab());
+
+// Re-detect product when user switches tabs or navigates
+chrome.tabs.onActivated.addListener(() => refreshCurrentTab());
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (tabId === originTabId && changeInfo.status === 'complete') {
+    refreshCurrentTab();
   }
 });
 

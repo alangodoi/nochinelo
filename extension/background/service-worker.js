@@ -6,43 +6,11 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000;
 let notifiedAlerts = new Set();
 let notifiedUnavailable = new Set();
 
-// --- Inline panel (iframe injected into page) ---
+// --- Side panel ---
 
+// Open side panel when extension icon is clicked
 chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab?.id) return;
-  const popupUrl = chrome.runtime.getURL(`popup/popup.html?tabId=${tab.id}`);
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    args: [popupUrl],
-    func: (url) => {
-      const ID = 'nochinelo-panel';
-      const existing = document.getElementById(ID);
-      if (existing) {
-        existing.style.display = existing.style.display === 'none' ? 'block' : 'none';
-        return;
-      }
-      const iframe = document.createElement('iframe');
-      iframe.id = ID;
-      iframe.src = url;
-      Object.assign(iframe.style, {
-        position: 'fixed',
-        top: '0',
-        right: '0',
-        width: '420px',
-        height: '100vh',
-        border: 'none',
-        zIndex: '2147483647',
-        boxShadow: '-4px 0 24px rgba(0,0,0,0.25)',
-        background: '#f8f9fa'
-      });
-      document.body.appendChild(iframe);
-      window.addEventListener('message', (e) => {
-        if (e.data?.type === 'NOCHINELO_CLOSE') {
-          iframe.style.display = 'none';
-        }
-      });
-    }
-  });
+  chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
 // --- Message handling ---
