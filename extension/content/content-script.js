@@ -158,16 +158,63 @@
       .trim() || null;
   }
 
+  // Extract EAN/GTIN from the rendered DOM (JS-rendered product detail tables)
+  function extractEAN() {
+    // 1. JSON-LD Product structured data
+    const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of ldScripts) {
+      try {
+        const json = JSON.parse(script.textContent);
+        const ean = json.gtin13 || json.gtin12 || json.gtin || json.ean;
+        if (ean && /^\d{8,14}$/.test(String(ean))) return String(ean);
+      } catch (e) {}
+    }
+
+    // 2. Scan table rows (th/td) and detail list items for EAN labels
+    const candidates = document.querySelectorAll('th, td, dt, dd, span, li');
+    for (const el of candidates) {
+      const text = el.textContent.trim();
+      if (/^(EAN|GTIN|C[oó]digo de [Bb]arras)$/i.test(text)) {
+        // Look for the value in the next sibling or adjacent cell
+        const row = el.closest('tr');
+        if (row) {
+          const cells = row.querySelectorAll('td');
+          const lastCell = cells[cells.length - 1];
+          if (lastCell && lastCell !== el) {
+            const val = lastCell.textContent.trim();
+            if (/^\d{8,14}$/.test(val)) return val;
+          }
+        }
+        // Try next sibling element (dl/dt/dd pattern)
+        const next = el.nextElementSibling;
+        if (next) {
+          const val = next.textContent.trim();
+          if (/^\d{8,14}$/.test(val)) return val;
+        }
+      }
+    }
+
+    // 3. Regex scan: find 13-digit EAN near a label
+    if (document.body) {
+      const html = document.body.innerHTML;
+      const match = html.match(/(?:EAN|GTIN|C[oó]digo de Barras)[^0-9]{0,30}(\d{13})/i);
+      if (match) return match[1];
+    }
+
+    return null;
+  }
+
   function getProductData(merchant) {
     let price = extractPrice(merchant);
     let title = extractTitle(merchant);
     const imageUrl = extractImage(merchant);
     const coupon = extractCoupon();
+    const ean = extractEAN();
 
     if (merchant.useDomPriceScan && !price) price = scanDomPrice();
     if (!title && merchant.useDomPriceScan) title = extractTitleFromMeta();
 
-    return { price, title, imageUrl, coupon };
+    return { price, title, imageUrl, coupon, ean };
   }
 
   // --- Main logic ---
@@ -194,6 +241,7 @@
         price: data.price,
         title: data.title,
         imageUrl: data.imageUrl || null,
+        ean: data.ean || null,
         url
       });
     }
@@ -224,8 +272,8 @@
       }
 
       const productId = match[1];
-      const { price, title, imageUrl, coupon } = getProductData(merchant);
-      sendResponse({ productId, source, title, price, imageUrl, coupon, url });
+      const { price, title, imageUrl, coupon, ean } = getProductData(merchant);
+      sendResponse({ productId, source, title, price, imageUrl, coupon, ean, url });
       return false;
     }
     return false;

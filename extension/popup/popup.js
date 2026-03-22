@@ -424,6 +424,13 @@ btnTrack.addEventListener('click', async () => {
       }
     }
 
+    // Show cheaper alternative banner if available
+    if (product.cheaperAlternative) {
+      const alt = product.cheaperAlternative;
+      const altName = MERCHANTS[alt.source]?.name || alt.source;
+      showAlternativeBanner(alt, altName, product.id);
+    }
+
     await showCurrentProduct();
   } catch (e) {
     console.error('Failed to track product:', e);
@@ -434,6 +441,37 @@ btnTrack.addEventListener('click', async () => {
     }, 2000);
   }
 });
+
+function showAlternativeBanner(alt, storeName, currentId) {
+  // Remove existing banner
+  document.getElementById('altBanner')?.remove();
+
+  const banner = document.createElement('div');
+  banner.id = 'altBanner';
+  banner.className = 'alternative-banner';
+  banner.innerHTML = `
+    <p>Mesmo produto mais barato na <strong>${escapeHTML(storeName)}</strong> por <strong>R$ ${alt.currentPrice.toFixed(2)}</strong></p>
+    <div class="alt-actions">
+      <button id="btnUseAlt" class="btn-alt-use">Rastrear o mais barato</button>
+      <button id="btnKeepCurrent" class="btn-alt-keep">Manter atual</button>
+    </div>
+  `;
+  productInfo.insertBefore(banner, productInfo.querySelector('.price-card'));
+
+  document.getElementById('btnUseAlt').addEventListener('click', async () => {
+    try {
+      await apiPost(`/api/products/${currentId}/replace`, { url: alt.url });
+      banner.remove();
+      await showCurrentProduct();
+    } catch (e) {
+      console.error('Failed to replace:', e);
+    }
+  });
+
+  document.getElementById('btnKeepCurrent').addEventListener('click', () => {
+    banner.remove();
+  });
+}
 
 // --- Remove button ---
 btnRemove.addEventListener('click', async () => {
@@ -861,7 +899,9 @@ async function renderProductList() {
     const replaceUI = p.unavailable
       ? `<button class="btn-replace-toggle" data-product-id="${p.id}">Substituir link</button>
          <div class="replace-section" data-product-id="${p.id}" style="display:none;">
-           <input type="text" class="replace-url-input" placeholder="Cole o novo link (Amazon, Mercado Livre, KaBuM! ou Shopee)">
+           <div class="suggestions-list" data-product-id="${p.id}"></div>
+           <button class="btn-refresh-suggestions" data-product-id="${p.id}" ${p.ean ? '' : 'disabled title="Visite a página do produto para extrair o EAN"'}>Buscar alternativas</button>
+           <input type="text" class="replace-url-input" placeholder="Ou cole um link manualmente">
            <div class="replace-actions">
              <button class="btn-replace-confirm">Confirmar</button>
              <button class="btn-replace-cancel">Cancelar</button>
@@ -972,6 +1012,83 @@ async function renderProductList() {
       section.style.display = 'none';
       section.querySelector('.replace-url-input').value = '';
       section.querySelector('.replace-status').textContent = '';
+    });
+  });
+
+  // Refresh suggestions buttons
+  productList.querySelectorAll('.btn-refresh-suggestions').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const productId = btn.dataset.productId;
+      btn.disabled = true;
+      btn.textContent = 'Buscando...';
+      try {
+        const results = await apiPost(`/api/products/${productId}/suggestions/refresh`, {});
+        renderSuggestions(productId, results);
+      } catch (e) {
+        console.error('Failed to refresh suggestions:', e);
+      }
+      btn.disabled = false;
+      btn.textContent = 'Buscar alternativas';
+    });
+  });
+
+  // Load existing suggestions for unavailable products
+  for (const p of products) {
+    if (p.unavailable) {
+      apiGet(`/api/products/${p.id}/suggestions`).then(suggestions => {
+        if (suggestions.length > 0) renderSuggestions(p.id, suggestions);
+      }).catch(() => {});
+    }
+  }
+}
+
+function renderSuggestions(productId, suggestions) {
+  const container = productList.querySelector(`.suggestions-list[data-product-id="${productId}"]`);
+  if (!container) return;
+
+  if (suggestions.length === 0) {
+    container.innerHTML = '<p class="suggestions-empty">Nenhuma alternativa encontrada.</p>';
+    return;
+  }
+
+  const merchantNames = { amazon: 'Amazon', mercadolivre: 'Mercado Livre', kabum: 'KaBuM!', shopee: 'Shopee' };
+
+  container.innerHTML = suggestions.map(s => {
+    const sourceName = merchantNames[s.source] || s.source;
+    const priceText = s.price ? `R$ ${s.price.toFixed(2)}` : '—';
+    const thumbHtml = s.image_url || s.imageUrl
+      ? `<img class="suggestion-thumb" src="${escapeAttr(s.image_url || s.imageUrl)}" alt="">`
+      : '';
+
+    return `
+      <div class="suggestion-card" data-url="${escapeAttr(s.url)}" data-product-id="${productId}">
+        ${thumbHtml}
+        <div class="suggestion-info">
+          <span class="source-badge suggestion-source">${escapeHTML(sourceName)}</span>
+          <span class="suggestion-price">${priceText}</span>
+        </div>
+        <button class="btn-use-suggestion">Usar</button>
+      </div>
+    `;
+  }).join('');
+
+  // Bind "Usar" buttons
+  container.querySelectorAll('.btn-use-suggestion').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const card = btn.closest('.suggestion-card');
+      const url = card.dataset.url;
+      const oldId = card.dataset.productId;
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        await apiPost(`/api/products/${oldId}/replace`, { url });
+        renderProductList();
+      } catch (e) {
+        btn.textContent = 'Erro';
+        setTimeout(() => { btn.textContent = 'Usar'; btn.disabled = false; }, 2000);
+      }
     });
   });
 }

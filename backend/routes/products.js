@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../db');
 const { detectFromUrl, getScraper } = require('../scrapers');
 const { checkProduct } = require('../scheduler');
+const { searchByEAN } = require('../utils/store-search');
 
 const router = express.Router();
 
@@ -22,7 +23,8 @@ function toApi(row) {
     lastChecked: row.last_checked,
     tracked: !!row.tracked,
     imageUrl: row.image_url,
-    coupon: row.coupon || null
+    coupon: row.coupon || null,
+    ean: row.ean || null
   };
 }
 
@@ -93,7 +95,20 @@ router.post('/', async (req, res) => {
   }
 
   const row = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
-  res.status(201).json(toApi(row));
+  const product = toApi(row);
+
+  // Check if the same product (by EAN) exists in other stores with a lower price
+  if (row.ean) {
+    const alternatives = db.prepare(
+      'SELECT * FROM products WHERE ean = ? AND id != ? AND source != ? AND current_price IS NOT NULL AND tracked = 1 ORDER BY current_price ASC'
+    ).all(row.ean, productId, source);
+
+    if (alternatives.length > 0 && alternatives[0].current_price < (row.current_price || Infinity)) {
+      product.cheaperAlternative = toApi(alternatives[0]);
+    }
+  }
+
+  res.status(201).json(product);
 });
 
 // DELETE /api/products/:id — stops tracking but keeps the product and history
@@ -127,6 +142,10 @@ router.patch('/:id', (req, res) => {
   if (req.body.title !== undefined) {
     updates.push('title = ?');
     values.push(req.body.title);
+  }
+  if (req.body.ean !== undefined) {
+    updates.push('ean = ?');
+    values.push(req.body.ean);
   }
 
   if (updates.length === 0) return res.json(toApi(existing));
@@ -189,7 +208,7 @@ router.post('/:id/price', (req, res) => {
   const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
 
-  const { price, title, imageUrl } = req.body;
+  const { price, title, imageUrl, ean } = req.body;
   if (!price || typeof price !== 'number') return res.status(400).json({ error: 'Valid price is required' });
 
   const now = new Date().toISOString();
@@ -200,11 +219,12 @@ router.post('/:id/price', (req, res) => {
       current_price = ?,
       title = COALESCE(?, title),
       image_url = COALESCE(?, image_url),
+      ean = COALESCE(?, ean),
       fail_count = 0,
       unavailable = 0,
       last_checked = ?
     WHERE id = ?
-  `).run(price, title || null, imageUrl || null, now, req.params.id);
+  `).run(price, title || null, imageUrl || null, ean || null, now, req.params.id);
 
   // Alert logic
   if (product.target_price && price <= product.target_price && !product.alert_triggered) {
@@ -244,6 +264,40 @@ router.post('/:id/check', async (req, res) => {
 
   const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
   res.json(toApi(updated));
+});
+
+// GET /api/products/:id/suggestions
+router.get('/:id/suggestions', (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT * FROM suggestions WHERE product_id = ? ORDER BY price ASC'
+  ).all(req.params.id);
+  res.json(rows);
+});
+
+// POST /api/products/:id/suggestions/refresh — trigger a new search
+router.post('/:id/suggestions/refresh', async (req, res) => {
+  const db = getDb();
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+  if (!product.ean) return res.status(400).json({ error: 'Product has no EAN — visit the product page to extract it' });
+
+  try {
+    const results = await searchByEAN(product.ean, product.source);
+    db.prepare('DELETE FROM suggestions WHERE product_id = ?').run(req.params.id);
+
+    const now = new Date().toISOString();
+    const insert = db.prepare(
+      'INSERT INTO suggestions (product_id, url, title, source, price, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    for (const r of results) {
+      insert.run(req.params.id, r.url, r.title, r.source, r.price || null, r.imageUrl || null, now);
+    }
+
+    res.json(results);
+  } catch (e) {
+    res.status(500).json({ error: 'Search failed' });
+  }
 });
 
 module.exports = router;

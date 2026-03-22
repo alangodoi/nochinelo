@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 async function handlePriceUpdate(msg) {
-  const { productId, source, price, title, imageUrl, url } = msg;
+  const { productId, source, price, title, imageUrl, ean, url } = msg;
   if (!productId) return;
   try {
     const res = await fetch(`${API_BASE}/api/products/${productId}`, {
@@ -42,6 +42,7 @@ async function handlePriceUpdate(msg) {
     // Update product data if we have new info
     const updates = {};
     if (title && !product.title) updates.title = title;
+    if (ean && !product.ean) updates.ean = ean;
     if (url) updates.url = url;
 
     if (Object.keys(updates).length > 0) {
@@ -57,7 +58,7 @@ async function handlePriceUpdate(msg) {
       await fetch(`${API_BASE}/api/products/${productId}/price`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-        body: JSON.stringify({ price, title, imageUrl })
+        body: JSON.stringify({ price, title, imageUrl, ean })
       });
     }
   } catch (e) {

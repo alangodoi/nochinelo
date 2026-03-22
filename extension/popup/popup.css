@@ -670,3 +670,124 @@ section {
   margin-top: 4px;
   font-size: 11px;
 }
+
+/* === Suggestions === */
+
+.suggestions-list {
+  margin-bottom: 8px;
+}
+
+.suggestion-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+.suggestion-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: #f7fafc;
+  flex-shrink: 0;
+}
+
+.suggestion-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.suggestion-source {
+  font-size: 8px;
+  padding: 1px 4px;
+}
+
+.suggestion-price {
+  font-weight: 700;
+  font-size: 12px;
+  color: #38a169;
+}
+
+.btn-use-suggestion {
+  padding: 3px 8px;
+  background: #38a169;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.btn-use-suggestion:hover { background: #2f855a; }
+
+.btn-refresh-suggestions {
+  display: block;
+  width: 100%;
+  padding: 5px;
+  margin-bottom: 8px;
+  background: transparent;
+  color: #3182ce;
+  border: 1px solid #bee3f8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.btn-refresh-suggestions:hover { background: #ebf8ff; }
+.btn-refresh-suggestions:disabled { opacity: 0.5; cursor: default; }
+
+.suggestions-empty {
+  font-size: 11px;
+  color: #a0aec0;
+  text-align: center;
+  padding: 4px;
+}
+
+/* === Alternative banner === */
+
+.alternative-banner {
+  background: #f0fff4;
+  border: 1px solid #c6f6d5;
+  color: #276749;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.alternative-banner p { margin-bottom: 8px; }
+
+.alt-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-alt-use {
+  padding: 5px 10px;
+  background: #38a169;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+.btn-alt-use:hover { background: #2f855a; }
+
+.btn-alt-keep {
+  padding: 5px 10px;
+  background: transparent;
+  color: #718096;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}

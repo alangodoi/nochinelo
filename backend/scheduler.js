@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { getDb } = require('./db');
 const { getScraper } = require('./scrapers');
+const { searchByEAN } = require('./utils/store-search');
 
 let cronTask = null;
 
@@ -70,6 +71,25 @@ async function checkProduct(product) {
 
       if (unavailable && !product.unavailable) {
         console.log(`[UNAVAIL] ${product.title} marked unavailable after ${failCount} failures`);
+
+        // Search for alternatives by EAN (fire-and-forget)
+        if (product.ean) {
+          searchByEAN(product.ean, product.source).then(results => {
+            if (results.length === 0) return;
+            const db = getDb();
+            const now = new Date().toISOString();
+            db.prepare('DELETE FROM suggestions WHERE product_id = ?').run(product.id);
+            const insert = db.prepare(
+              'INSERT INTO suggestions (product_id, url, title, source, price, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            for (const r of results) {
+              insert.run(product.id, r.url, r.title, r.source, r.price || null, r.imageUrl || null, now);
+            }
+            console.log(`[SEARCH] Found ${results.length} alternatives for ${product.title}`);
+          }).catch(e => {
+            console.error(`[SEARCH] Error finding alternatives:`, e.message);
+          });
+        }
       }
 
       console.log(`[FAIL] ${product.id} (${product.source}): attempt ${failCount}`);

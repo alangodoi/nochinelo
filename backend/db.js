@@ -48,11 +48,25 @@ function migrate(db) {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS suggestions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id TEXT NOT NULL,
+      url TEXT NOT NULL,
+      title TEXT,
+      source TEXT,
+      price REAL,
+      image_url TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // Migrations for existing DBs
   const columns = db.prepare("PRAGMA table_info(products)").all();
   const colNames = columns.map(c => c.name);
+  if (!colNames.includes('ean')) {
+    db.exec('ALTER TABLE products ADD COLUMN ean TEXT');
+  }
   if (!colNames.includes('tracked')) {
     db.exec('ALTER TABLE products ADD COLUMN tracked INTEGER DEFAULT 1');
   }
