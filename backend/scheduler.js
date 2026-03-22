@@ -13,6 +13,7 @@ function shouldRecordPrice(lastEntry, newPrice) {
 }
 
 async function checkProduct(product) {
+  if (SKIP_SOURCES.has(product.source)) return;
   const scraper = getScraper(product.source);
   if (!scraper) return;
 
@@ -78,12 +79,13 @@ async function checkProduct(product) {
   }
 }
 
+const SKIP_SOURCES = new Set([]);
+
 async function checkAllProducts() {
   const db = getDb();
-  // Check ALL products regardless of tracked status — history benefits everyone
   const products = db.prepare(
     'SELECT * FROM products WHERE unavailable = 0'
-  ).all();
+  ).all().filter(p => !SKIP_SOURCES.has(p.source));
 
   if (products.length === 0) return;
 

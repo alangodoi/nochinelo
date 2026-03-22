@@ -24,7 +24,10 @@
     shopee: {
       hostPattern: 'shopee.com.br',
       idPattern: /-i\.(\d+\.\d+)/,
-      useDomScrape: true,
+      priceSelectors: [],
+      titleSelector: null,
+      imageSelectors: ['meta[property="og:image"]'],
+      useDomPriceScan: true,
       isSPA: true
     },
     kabum: {
@@ -81,43 +84,6 @@
     return el ? el.textContent.trim() : null;
   }
 
-  function extractShopeeFromDOM() {
-    const title = document.title
-      .replace(/\s*[\|\-–]\s*Shopee.*$/i, '')
-      .replace(/\s*[\|\-–]\s*Lojas Oficiais.*$/i, '')
-      .trim() || null;
-
-    if (!document.body) return { price: null, title, imageUrl: null };
-
-    let price = null;
-    const elements = document.body.querySelectorAll('div, span');
-    for (const el of elements) {
-      const text = el.textContent.trim();
-      if (text.length > 40) continue;
-      const match = text.match(/R\$\s?([\d.]+,\d{2})/);
-      if (match) {
-        const parsed = parseBRLPrice(match[0]);
-        if (parsed && parsed > 1) {
-          price = parsed;
-          break;
-        }
-      }
-    }
-
-    // Extract product image
-    let imageUrl = null;
-    const ogImage = document.querySelector('meta[property="og:image"]');
-    if (ogImage) {
-      imageUrl = ogImage.getAttribute('content') || null;
-    }
-    if (!imageUrl) {
-      const img = document.querySelector('img[src*="susercontent.com"]');
-      if (img) imageUrl = img.src;
-    }
-
-    return { price, title, imageUrl };
-  }
-
   function extractImage(merchant) {
     if (!merchant.imageSelectors) return null;
     for (const sel of merchant.imageSelectors) {
@@ -162,16 +128,46 @@
     return null;
   }
 
-  function getProductData(merchant) {
-    if (merchant.useDomScrape) {
-      return extractShopeeFromDOM();
+  // Scan DOM for the highest R$ price — used for Shopee where CSS classes are obfuscated
+  function scanDomPrice() {
+    if (!document.body) return null;
+    const candidates = [];
+    const elements = document.body.querySelectorAll('div, span');
+    for (const el of elements) {
+      const text = el.textContent.trim();
+      if (text.length > 40) continue;
+      const match = text.match(/R\$\s?([\d.]+,\d{2})/);
+      if (match) {
+        const parsed = parseBRLPrice(match[0]);
+        if (parsed && parsed > 1) candidates.push(parsed);
+      }
     }
-    return {
-      price: extractPrice(merchant),
-      title: extractTitle(merchant),
-      imageUrl: extractImage(merchant),
-      coupon: extractCoupon()
-    };
+    return candidates.length > 0 ? Math.max(...candidates) : null;
+  }
+
+  function extractTitleFromMeta() {
+    const og = document.querySelector('meta[property="og:title"]');
+    if (og) {
+      return og.getAttribute('content')
+        ?.replace(/\s*\|\s*Shopee.*$/i, '')
+        .trim() || null;
+    }
+    return document.title
+      .replace(/\s*[\|\-–]\s*Shopee.*$/i, '')
+      .replace(/\s*[\|\-–]\s*Lojas Oficiais.*$/i, '')
+      .trim() || null;
+  }
+
+  function getProductData(merchant) {
+    let price = extractPrice(merchant);
+    let title = extractTitle(merchant);
+    const imageUrl = extractImage(merchant);
+    const coupon = extractCoupon();
+
+    if (merchant.useDomPriceScan && !price) price = scanDomPrice();
+    if (!title && merchant.useDomPriceScan) title = extractTitleFromMeta();
+
+    return { price, title, imageUrl, coupon };
   }
 
   // --- Main logic ---
@@ -203,9 +199,8 @@
     }
   }
 
-  // SPA observer for Shopee — also re-sends price updates on navigation
+  // SPA merchants (e.g. Shopee) need delayed send and URL change detection
   if (merchant.isSPA) {
-    // Delay initial send to let Shopee JS render
     setTimeout(sendPriceUpdate, 3000);
     setInterval(() => {
       const url = window.location.href;
@@ -215,7 +210,6 @@
       }
     }, 1000);
   } else {
-    // For non-SPA merchants, send once on load
     sendPriceUpdate();
   }
 

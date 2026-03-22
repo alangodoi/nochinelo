@@ -6,6 +6,37 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000;
 let notifiedAlerts = new Set();
 let notifiedUnavailable = new Set();
 
+// --- Popout window ---
+
+const POPOUT_WIDTH = 440;
+const POPOUT_HEIGHT = 700;
+let popoutWindowId = null;
+
+chrome.action.onClicked.addListener(async (tab) => {
+  // If popout is already open, focus it
+  if (popoutWindowId != null) {
+    try {
+      await chrome.windows.get(popoutWindowId);
+      await chrome.windows.update(popoutWindowId, { focused: true });
+      return;
+    } catch (e) {
+      popoutWindowId = null;
+    }
+  }
+
+  const win = await chrome.windows.create({
+    url: `popup/popup.html?tabId=${tab?.id || ''}`,
+    type: 'popup',
+    width: POPOUT_WIDTH,
+    height: POPOUT_HEIGHT
+  });
+  popoutWindowId = win.id;
+});
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (windowId === popoutWindowId) popoutWindowId = null;
+});
+
 // --- Message handling ---
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

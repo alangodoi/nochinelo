@@ -2,16 +2,17 @@
   "manifest_version": 3,
   "name": "No Chinelo",
   "version": "2.0.0",
-  "description": "Rastreie o histórico de preços de produtos da Amazon.com.br, Mercado Livre, Shopee e KaBuM! para encontrar o melhor momento para comprar.",
+  "description": "Rastreie o histórico de preços de produtos da Amazon.com.br, Mercado Livre, KaBuM! e Shopee para encontrar o melhor momento para comprar.",
   "permissions": [
     "storage",
-    "notifications"
+    "notifications",
+    "activeTab"
   ],
   "host_permissions": [
     "https://www.amazon.com.br/*",
     "https://www.mercadolivre.com.br/*",
-    "https://shopee.com.br/*",
-    "https://www.kabum.com.br/*"
+    "https://www.kabum.com.br/*",
+    "https://shopee.com.br/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
@@ -19,13 +20,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.amazon.com.br/*", "https://www.mercadolivre.com.br/*", "https://shopee.com.br/*", "https://www.kabum.com.br/*"],
+      "matches": ["https://www.amazon.com.br/*", "https://www.mercadolivre.com.br/*", "https://www.kabum.com.br/*", "https://shopee.com.br/*"],
       "js": ["content/content-script.js"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

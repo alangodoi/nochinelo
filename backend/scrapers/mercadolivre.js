@@ -1,55 +1,45 @@
-const cheerio = require('cheerio');
-
-function parseBRLPrice(text) {
-  const cleaned = text
-    .replace(/[R$\s\u00a0]/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  const price = parseFloat(cleaned);
-  return (!isNaN(price) && price > 0) ? price : null;
-}
+const { getPage, releasePage } = require('../utils/browser');
 
 async function scrape(url) {
-  const response = await fetch(url, {
-    headers: {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8',
-      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    }
-  });
-  if (!response.ok) return null;
+  const page = await getPage();
+  try {
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
+    await page.waitForSelector('.andes-money-amount__fraction', { timeout: 10000 }).catch(() => {});
 
-  const html = await response.text();
-  const $ = cheerio.load(html);
+    const result = await page.evaluate(() => {
+      let price = null;
 
-  let price = null;
+      // Find the first .andes-money-amount that contains a currency symbol (the main price)
+      const amounts = document.querySelectorAll('.andes-money-amount');
+      for (const el of amounts) {
+        const currency = el.querySelector('.andes-money-amount__currency-symbol');
+        if (!currency) continue;
+        const fractionEl = el.querySelector('.andes-money-amount__fraction');
+        if (!fractionEl) continue;
+        const fraction = fractionEl.textContent.replace(/\./g, '');
+        const centsEl = el.querySelector('.andes-money-amount__cents');
+        const cents = centsEl ? centsEl.textContent.padStart(2, '0') : '00';
+        const p = parseFloat(`${fraction}.${cents}`);
+        if (!isNaN(p) && p > 0) { price = p; break; }
+      }
 
-  // Try sr-only price tag first
-  const srOnly = $('.price-tag-text-sr-only').first();
-  if (srOnly.length) {
-    price = parseBRLPrice(srOnly.text());
+      const titleEl = document.querySelector('h1.ui-pdp-title');
+      const title = titleEl ? titleEl.textContent.trim() : null;
+
+      let imageUrl = null;
+      const img = document.querySelector('.ui-pdp-gallery__figure img')
+        || document.querySelector('img.ui-pdp-image');
+      if (img) imageUrl = img.src || img.getAttribute('data-src') || null;
+
+      return { price, title, imageUrl };
+    });
+
+    return result;
+  } catch (e) {
+    return null;
+  } finally {
+    await releasePage(page);
   }
-
-  // Fallback: fraction + cents (scoped to second-line to avoid strikethrough)
-  if (!price) {
-    const fractionEl = $('.ui-pdp-price__second-line .andes-money-amount__fraction').first();
-    if (fractionEl.length) {
-      const fraction = fractionEl.text().replace(/\./g, '');
-      const centsEl = $('.ui-pdp-price__second-line .andes-money-amount__cents').first();
-      const cents = centsEl.length ? centsEl.text().padStart(2, '0') : '00';
-      const p = parseFloat(`${fraction}.${cents}`);
-      if (!isNaN(p) && p > 0) price = p;
-    }
-  }
-
-  const title = $('h1.ui-pdp-title').text().trim() || null;
-
-  const imageUrl = $('.ui-pdp-gallery__figure img').attr('src')
-    || $('figure.ui-pdp-gallery__figure img').attr('data-src')
-    || $('img.ui-pdp-image').attr('src')
-    || null;
-
-  return { price, title, imageUrl };
 }
 
 function buildUrl(productId) {

@@ -1,52 +1,69 @@
+const { getPage, releasePage, loadCookies } = require('../utils/browser');
+
 async function scrape(url) {
-  const id = extractId(url);
-  if (!id) return null;
+  const page = await getPage();
+  try {
+    const hasCookies = await loadCookies(page, 'shopee');
 
-  const [shopId, itemId] = id.split('.');
+    // Set up API response interception before navigating
+    let apiData = null;
+    const apiPromise = new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 15000);
 
-  // Try the item detail API first, then fallback to PDP API
-  const apis = [
-    `https://shopee.com.br/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`,
-    `https://shopee.com.br/api/v4/pdp/get_pc?item_id=${itemId}&shop_id=${shopId}`
-  ];
-
-  for (const apiUrl of apis) {
-    try {
-      const response = await fetch(apiUrl, {
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8',
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          'Referer': 'https://shopee.com.br/'
-        }
+      page.on('response', async (response) => {
+        const reqUrl = response.url();
+        if (!/\/api\/v4\/(item\/get|pdp\/get_pc)/.test(reqUrl)) return;
+        try {
+          const json = await response.json();
+          const data = json?.data;
+          if (data && (data.name || data.item?.name)) {
+            clearTimeout(timeout);
+            resolve(data);
+          }
+        } catch (e) {}
       });
-      if (!response.ok) continue;
+    });
 
-      const json = await response.json();
-      const data = json.data;
-      if (!data) continue;
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 25000 }).catch(() => {});
+    apiData = await apiPromise;
 
-      // Price is in units of 1/100000 BRL
-      const rawPrice = data.price || data.price_min;
+    if (apiData) {
+      const item = apiData.item || apiData;
+      const rawPrice = item.price || item.price_min;
       const price = rawPrice ? rawPrice / 100000 : null;
-      const title = data.name || null;
-
-      const imageHash = data.image;
+      const title = item.name || null;
+      const imageHash = item.image;
       const imageUrl = imageHash
         ? `https://down-br.img.susercontent.com/file/${imageHash}`
         : null;
 
       if (price) return { price, title, imageUrl };
-    } catch (e) {
-      continue;
     }
-  }
 
-  return null;
+    // Fallback: extract title and image from meta tags (no login needed)
+    const meta = await page.evaluate(() => {
+      const ogTitle = document.querySelector('meta[property="og:title"]');
+      const ogImage = document.querySelector('meta[property="og:image"]');
+      let title = ogTitle?.getAttribute('content') || null;
+      if (title) title = title.replace(/\s*\|\s*Shopee.*$/i, '').trim();
+      const imageUrl = ogImage?.getAttribute('content') || null;
+      return { title, imageUrl };
+    });
+
+    if (!hasCookies && meta.title) {
+      console.log('[SHOPEE] Sem cookies de login. Execute: node login-shopee.js');
+    }
+
+    return { price: null, title: meta.title, imageUrl: meta.imageUrl };
+  } catch (e) {
+    return null;
+  } finally {
+    await releasePage(page);
+  }
 }
 
 function buildUrl(productId) {
-  return `https://shopee.com.br/-i.${productId}`;
+  return `https://shopee.com.br/product-i.${productId}`;
 }
 
 function extractId(url) {

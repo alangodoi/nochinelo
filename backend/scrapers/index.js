@@ -1,9 +1,9 @@
 const amazon = require('./amazon');
 const mercadolivre = require('./mercadolivre');
-const shopee = require('./shopee');
 const kabum = require('./kabum');
+const shopee = require('./shopee');
 
-const scrapers = { amazon, mercadolivre, shopee, kabum };
+const scrapers = { amazon, mercadolivre, kabum, shopee };
 
 /**
  * Detect merchant from URL and return { source, productId, scraper }

@@ -5,6 +5,7 @@ const { getDb } = require('./db');
 const productsRouter = require('./routes/products');
 const pricesRouter = require('./routes/prices');
 const scheduler = require('./scheduler');
+const { closeBrowser } = require('./utils/browser');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -122,3 +123,11 @@ app.listen(PORT, () => {
   console.log(`[SERVER] Running on http://localhost:${PORT}`);
   scheduler.start();
 });
+
+// Graceful shutdown — close headless browser
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, async () => {
+    await closeBrowser();
+    process.exit(0);
+  });
+}

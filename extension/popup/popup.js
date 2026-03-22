@@ -89,6 +89,7 @@ let chartInstance = null;
 let currentHistory = [];       // full history for current-page chart
 let detailHistory = [];        // full history for detail chart
 const DEFAULT_RANGE_DAYS = 45;
+let originTabId = null;        // the product page tab that opened this popout
 
 // --- DOM refs ---
 const tabCurrent = document.getElementById('tabCurrent');
@@ -167,8 +168,34 @@ function extractProductInfo(url) {
 }
 
 // --- Init ---
+
+async function getOriginTab() {
+  // Get the tab ID from query params (set by the service worker)
+  const params = new URLSearchParams(window.location.search);
+  const tabIdParam = params.get('tabId');
+  if (tabIdParam) {
+    originTabId = parseInt(tabIdParam, 10);
+    try {
+      return await chrome.tabs.get(originTabId);
+    } catch (e) {
+      originTabId = null;
+    }
+  }
+  // Fallback: find the active tab in the last focused window (not this popout)
+  const wins = await chrome.windows.getAll({ windowTypes: ['normal'] });
+  for (const win of wins) {
+    const tabs = await chrome.tabs.query({ active: true, windowId: win.id });
+    const tab = tabs[0];
+    if (tab && !tab.url?.startsWith('chrome-extension://')) {
+      originTabId = tab.id;
+      return tab;
+    }
+  }
+  return null;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = await getOriginTab();
   if (tab?.url) {
     const info = extractProductInfo(tab.url);
     if (info) {
@@ -289,9 +316,8 @@ async function showCurrentProduct() {
       couponBanner.style.display = 'none';
     }
     // Also ask the content script for live coupon (JS-rendered coupons won't be in backend HTML)
-    const [liveTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (liveTab?.id) {
-      chrome.tabs.sendMessage(liveTab.id, { type: 'GET_PRICE' }, (response) => {
+    if (originTabId) {
+      chrome.tabs.sendMessage(originTabId, { type: 'GET_PRICE' }, (response) => {
         if (response?.coupon) {
           couponBanner.textContent = response.coupon;
           couponBanner.style.display = 'flex';
@@ -337,9 +363,8 @@ async function showCurrentProduct() {
     }
 
     // Also ask content script for live data (may have fresher price/coupon)
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'GET_PRICE' }, (response) => {
+    if (originTabId) {
+      chrome.tabs.sendMessage(originTabId, { type: 'GET_PRICE' }, (response) => {
         if (response?.price) {
           productPrice.textContent = `R$ ${response.price.toFixed(2)}`;
         }
@@ -362,7 +387,9 @@ async function showCurrentProduct() {
 
 // --- Track button ---
 btnTrack.addEventListener('click', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!originTabId) return;
+  let tab;
+  try { tab = await chrome.tabs.get(originTabId); } catch (e) { return; }
   if (!tab?.url) return;
 
   btnTrack.disabled = true;
@@ -371,12 +398,12 @@ btnTrack.addEventListener('click', async () => {
   try {
     const product = await apiPost('/api/products', { url: tab.url });
 
-    // If backend scraper couldn't get data (e.g. Shopee 403), try sending
+    // If backend scraper couldn't get data, try sending
     // data from the content script
     if (!product.title || !product.currentPrice) {
       try {
         const liveData = await new Promise((resolve) => {
-          chrome.tabs.sendMessage(tab.id, { type: 'GET_PRICE' }, resolve);
+          chrome.tabs.sendMessage(originTabId, { type: 'GET_PRICE' }, resolve);
         });
         if (liveData && (liveData.price || liveData.title)) {
           await apiPost(`/api/products/${product.id}/price`, {
@@ -827,7 +854,7 @@ async function renderProductList() {
     const replaceUI = p.unavailable
       ? `<button class="btn-replace-toggle" data-product-id="${p.id}">Substituir link</button>
          <div class="replace-section" data-product-id="${p.id}" style="display:none;">
-           <input type="text" class="replace-url-input" placeholder="Cole o novo link (Amazon, Mercado Livre ou Shopee)">
+           <input type="text" class="replace-url-input" placeholder="Cole o novo link (Amazon, Mercado Livre, KaBuM! ou Shopee)">
            <div class="replace-actions">
              <button class="btn-replace-confirm">Confirmar</button>
              <button class="btn-replace-cancel">Cancelar</button>
@@ -906,7 +933,7 @@ async function renderProductList() {
 
       const newInfo = extractProductInfo(newUrl);
       if (!newInfo) {
-        status.textContent = 'URL inválida. Use um link de produto Amazon, Mercado Livre ou Shopee.';
+        status.textContent = 'URL inválida. Use um link de produto Amazon, Mercado Livre, KaBuM! ou Shopee.';
         status.style.color = '#e53e3e';
         return;
       }
