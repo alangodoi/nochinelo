@@ -91,6 +91,11 @@ let detailHistory = [];        // full history for detail chart
 const DEFAULT_RANGE_DAYS = 45;
 let originTabId = null;        // the product page tab that opened this popout
 
+// --- Close button (when embedded as iframe) ---
+document.getElementById('btnClose')?.addEventListener('click', () => {
+  window.parent.postMessage({ type: 'NOCHINELO_CLOSE' }, '*');
+});
+
 // --- DOM refs ---
 const tabCurrent = document.getElementById('tabCurrent');
 const tabAll = document.getElementById('tabAll');

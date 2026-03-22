@@ -6,35 +6,43 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000;
 let notifiedAlerts = new Set();
 let notifiedUnavailable = new Set();
 
-// --- Popout window ---
-
-const POPOUT_WIDTH = 440;
-const POPOUT_HEIGHT = 700;
-let popoutWindowId = null;
+// --- Inline panel (iframe injected into page) ---
 
 chrome.action.onClicked.addListener(async (tab) => {
-  // If popout is already open, focus it
-  if (popoutWindowId != null) {
-    try {
-      await chrome.windows.get(popoutWindowId);
-      await chrome.windows.update(popoutWindowId, { focused: true });
-      return;
-    } catch (e) {
-      popoutWindowId = null;
+  if (!tab?.id) return;
+  const popupUrl = chrome.runtime.getURL(`popup/popup.html?tabId=${tab.id}`);
+  chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    args: [popupUrl],
+    func: (url) => {
+      const ID = 'nochinelo-panel';
+      const existing = document.getElementById(ID);
+      if (existing) {
+        existing.style.display = existing.style.display === 'none' ? 'block' : 'none';
+        return;
+      }
+      const iframe = document.createElement('iframe');
+      iframe.id = ID;
+      iframe.src = url;
+      Object.assign(iframe.style, {
+        position: 'fixed',
+        top: '0',
+        right: '0',
+        width: '420px',
+        height: '100vh',
+        border: 'none',
+        zIndex: '2147483647',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.25)',
+        background: '#f8f9fa'
+      });
+      document.body.appendChild(iframe);
+      window.addEventListener('message', (e) => {
+        if (e.data?.type === 'NOCHINELO_CLOSE') {
+          iframe.style.display = 'none';
+        }
+      });
     }
-  }
-
-  const win = await chrome.windows.create({
-    url: `popup/popup.html?tabId=${tab?.id || ''}`,
-    type: 'popup',
-    width: POPOUT_WIDTH,
-    height: POPOUT_HEIGHT
   });
-  popoutWindowId = win.id;
-});
-
-chrome.windows.onRemoved.addListener((windowId) => {
-  if (windowId === popoutWindowId) popoutWindowId = null;
 });
 
 // --- Message handling ---
