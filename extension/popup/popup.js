@@ -114,6 +114,16 @@ const alertSection = document.querySelector('.alert-section');
 const couponBanner = document.getElementById('couponBanner');
 const productList = document.getElementById('productList');
 const noProducts = document.getElementById('noProducts');
+const searchInput = document.getElementById('searchInput');
+
+// Filter tracked products list
+searchInput.addEventListener('input', () => {
+  const query = searchInput.value.toLowerCase().trim();
+  productList.querySelectorAll('li').forEach(li => {
+    const title = li.querySelector('.product-item-title')?.textContent.toLowerCase() || '';
+    li.style.display = title.includes(query) ? '' : 'none';
+  });
+});
 
 // Detail view refs
 const viewDetail = document.getElementById('viewDetail');

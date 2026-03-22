@@ -51,6 +51,22 @@ nav {
   border-bottom-color: #ff9900;
 }
 
+.search-bar {
+  padding: 0 0 10px;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+}
+.search-bar input:focus {
+  border-color: #ff9900;
+}
+
 section {
   padding: 12px;
 }
